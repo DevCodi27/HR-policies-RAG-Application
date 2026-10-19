@@ -1,0 +1,89 @@
+version: "3.8"                                                                                                                        
+                                                                                                                                        
+services:                                                                                                                             
+  # -------------------------------------------------------------                                                                     
+  # 1. MySQL 8.0: System of Record for Documents & Policies                                                                           
+  # -------------------------------------------------------------                                                                     
+  mysql:                                                                                                                              
+    image: mysql:8.0                                                                                                                  
+    container_name: policy_desk_mysql                                                                                                 
+    restart: always                                                                                                                   
+    environment:                                                                                                                      
+      MYSQL_ROOT_PASSWORD: "123456"                                                                                                   
+      MYSQL_DATABASE: "policy_desk_db"                                                                                                
+    ports:                                                                                                                            
+      - "3306:3306"                                                                                                                   
+    volumes:                                                                                                                          
+      - mysql_data:/var/lib/mysql                                                                                                     
+    healthcheck:                                                                                                                      
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p123456"]                                                
+      interval: 5s                                                                                                                    
+      timeout: 5s                                                                                                                     
+      retries: 10                                                                                                                     
+      start_period: 10s                                                                                                               
+    networks:                                                                                                                         
+      - policy_net                                                                                                                    
+                                                                                                                                      
+  # -------------------------------------------------------------                                                                     
+  # 2. FastAPI Backend: Agentic AI, RAG, Multi-Agent & Langfuse                                                                       
+  # -------------------------------------------------------------                                                                     
+  backend:                                                                                                                            
+    build:                                                                                                                            
+      context: ./backend                                                                                                              
+      dockerfile: Dockerfile                                                                                                          
+    container_name: policy_desk_backend                                                                                               
+    restart: on-failure                                                                                                               
+    depends_on:                                                                                                                       
+      mysql:                                                                                                                          
+        condition: service_healthy                                                                                                    
+    environment:                                                                                                                      
+      - DATABASE_URL=mysql+pymysql://root:123456@mysql:3306/policy_desk_db                                                            
+      - GROQ_API_KEY=${GROQ_API_KEY}                                                                                                  
+      - DEFAULT_MODEL=${DEFAULT_MODEL:-qwen/qwen3.8-27b}                                                                              
+      - ENVIRONMENT=production                                                                                                        
+      - LOG_LEVEL=INFO                                                                                                                
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}                                                                                    
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}                                                                                    
+      - LANGFUSE_BASE_URL=${LANGFUSE_BASE_URL:-https://cloud.langfuse.com}                                                            
+    ports:                                                                                                                            
+      - "8000:8000"                                                                                                                   
+    volumes:                                                                                                                          
+      - chroma_data:/app/data/chroma_db                                                                                               
+    healthcheck:                                                                                                                      
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]                                                                     
+      interval: 10s                                                                                                                   
+      timeout: 5s                                                                                                                     
+      retries: 5                                                                                                                      
+      start_period: 15s                                                                                                               
+    networks:                                                                                                                         
+      - policy_net                                                                                                                    
+                                                                                                                                      
+  # -------------------------------------------------------------                                                                     
+  # 3. Angular 19+ Frontend: Nginx SPA with Observability Dashboard                                                                   
+  # -------------------------------------------------------------                                                                     
+  frontend:                                                                                                                           
+    build:                                                                                                                            
+      context: ./frontend                                                                                                             
+      dockerfile: Dockerfile                                                                                                          
+    container_name: policy_desk_frontend                                                                                              
+    restart: always                                                                                                                   
+    depends_on:                                                                                                                       
+      backend:                                                                                                                        
+        condition: service_healthy                                                                                                    
+    ports:                                                                                                                            
+      - "4200:80"                                                                                                                     
+    networks:                                                                                                                         
+      - policy_net                                                                                                                    
+                                                                                                                                      
+# -------------------------------------------------------------                                                                       
+# Named Volumes & Networks                                                                                                            
+# -------------------------------------------------------------                                                                       
+volumes:                                                                                                                              
+  mysql_data:                                                                                                                         
+    driver: local                                                                                                                     
+  chroma_data:                                                                                                                        
+    driver: local                                                                                                                     
+                                                                                                                                      
+networks:                                                                                                                             
+  policy_net:                                                                                                                         
+    driver: bridge
