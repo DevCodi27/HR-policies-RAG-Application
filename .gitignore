@@ -1,0 +1,31 @@
+# Environment secrets
+.env
+*.env
+
+# Local Chroma Vector Database
+data/chroma_db/
+backend/data/chroma_db/
+
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node / Angular
+node_modules/
+.angular/
+frontend/.angular/
+frontend/dist/
+dist/
+
+# Virtual Environments
+venv/
+env/
+.venv/
+
+# OS files
+.DS_Store
+Thumbs.db
