@@ -1,0 +1,260 @@
+<div class="trace-dashboard-layout">
+  <!-- Top Header Banner -->
+  <header class="dashboard-header">
+    <div class="header-titles">
+      <h2>🔍 Distributed Traces & Observability</h2>
+      <p class="subtitle">
+        Real-time telemetry, token accounting, and nested agent execution spans
+      </p>
+    </div>
+
+    <div class="header-actions">
+      @if (metrics()?.langfuse_connected) {
+        <button class="btn-langfuse" (click)="openLangfuse()" title="Open traces in Langfuse Cloud Console">
+          <span class="pulse-dot"></span>
+          Langfuse Cloud Connected ↗
+        </button>
+      } @else {
+        <span class="badge-local">● In-Memory Trace Engine</span>
+      }
+
+      <button class="btn-refresh" (click)="loadTraces()" [disabled]="isLoading()">
+        🔄 Refresh
+      </button>
+    </div>
+  </header>
+
+  <!-- Key Metrics Row -->
+  @if (metrics(); as m) {
+    <section class="metrics-grid">
+      <div class="metric-card">
+        <span class="metric-label">Total Traces</span>
+        <strong class="metric-value">{{ m.total_traces }}</strong>
+        <span class="metric-sub">{{ m.single_agent_traces }} Single • {{ m.multi_agent_traces }} Multi</span>
+      </div>
+
+      <div class="metric-card">
+        <span class="metric-label">Total Tokens Tracked</span>
+        <strong class="metric-value">{{ m.total_tokens | number }}</strong>
+        <span class="metric-sub">TikToken BPE Accounting</span>
+      </div>
+
+      <div class="metric-card">
+        <span class="metric-label">Cumulative Cost (USD)</span>
+        <strong class="metric-value text-green">${{ m.total_cost_usd | number:'1.6-6' }}</strong>
+        <span class="metric-sub">Groq LPU Rates</span>
+      </div>
+
+      <div class="metric-card">
+        <span class="metric-label">Average Latency</span>
+        <strong class="metric-value text-blue">{{ m.avg_latency_sec }}s</strong>
+        <span class="metric-sub">End-to-End Response Time</span>
+      </div>
+    </section>
+  }
+
+  <!-- Error Alert -->
+  @if (errorMessage()) {
+    <div class="alert alert-error">
+      {{ errorMessage() }}
+    </div>
+  }
+
+  <!-- Filter & Search Bar -->
+  <section class="toolbar">
+    <div class="search-box">
+      <span>🔎</span>
+      <input
+        type="text"
+        placeholder="Search traces by employee ID, question, or trace UUID..."
+        [ngModel]="searchTerm()"
+        (ngModelChange)="searchTerm.set($event)"
+      />
+    </div>
+
+    <div class="filter-pills">
+      <button
+        [class.active]="filterMode() === 'all'"
+        (click)="filterMode.set('all')"
+      >
+        All Traces ({{ traces().length }})
+      </button>
+      <button
+        [class.active]="filterMode() === 'single'"
+        (click)="filterMode.set('single')"
+      >
+        ⚡ Single Agent ({{ metrics()?.single_agent_traces ?? 0 }})
+      </button>
+      <button
+        [class.active]="filterMode() === 'multi'"
+        (click)="filterMode.set('multi')"
+      >
+        🤖 Multi-Agent Team ({{ metrics()?.multi_agent_traces ?? 0 }})
+      </button>
+    </div>
+  </section>
+
+  <!-- Split View: Traces List & Detail Inspector -->
+  <div class="dashboard-body">
+    <!-- Left: Traces Table / List -->
+    <div class="traces-list-pane">
+      @if (filteredTraces().length === 0) {
+        <div class="empty-state">
+          <p>No traces match the filter criteria.</p>
+          <small>Ask questions in the Policy Chat tab to generate live telemetry!</small>
+        </div>
+      } @else {
+        <div class="traces-table-container">
+          <table class="traces-table">
+            <thead>
+              <tr>
+                <th>Status</th>
+                <th>Engine</th>
+                <th>Employee</th>
+                <th>Query</th>
+                <th>Latency</th>
+                <th>Cost</th>
+                <th>Time</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (t of filteredTraces(); track t.trace_id) {
+                <tr
+                  [class.selected]="selectedTrace()?.trace_id === t.trace_id"
+                  (click)="selectTrace(t)"
+                >
+                  <td>
+                    <span class="status-badge" [class.success]="t.status === 'SUCCESS'" [class.blocked]="t.status === 'SECURITY_BLOCKED'">
+                      {{ t.status === 'SUCCESS' ? '✓ OK' : '⚠ Blocked' }}
+                    </span>
+                  </td>
+                  <td>
+                    <span class="engine-badge" [class.multi]="t.agent_mode === 'multi'">
+                      {{ t.agent_mode === 'multi' ? '🤖 Multi' : '⚡ Single' }}
+                    </span>
+                  </td>
+                  <td><code>{{ t.employee_id }}</code></td>
+                  <td class="query-cell" [title]="t.query">{{ t.query }}</td>
+                  <td>{{ t.latency_sec }}s</td>
+                  <td>${{ t.cost_usd | number:'1.5-5' }}</td>
+                  <td class="time-cell">{{ t.timestamp | date:'shortTime' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </div>
+
+    <!-- Right: Trace Waterfall & Span Inspector -->
+    <div class="trace-detail-pane">
+      @if (selectedTrace(); as trace) {
+        <div class="detail-card">
+          <!-- Trace Header -->
+          <div class="detail-header">
+            <div>
+              <h3>Trace Details</h3>
+              <code class="trace-id">{{ trace.trace_id }}</code>
+            </div>
+            <div class="detail-header-badges">
+              <span class="engine-badge" [class.multi]="trace.agent_mode === 'multi'">
+                {{ trace.agent_mode === 'multi' ? '🤖 Multi-Agent Supervisor' : '⚡ Single-Agent ReAct' }}
+              </span>
+              @if (trace.langfuse_synced) {
+                <span class="badge-synced" title="Exported to Langfuse Cloud">☁️ Langfuse Synced</span>
+              }
+            </div>
+          </div>
+
+          <!-- Query & Reply Snapshot -->
+          <div class="io-box">
+            <div class="io-section">
+              <strong>Employee Query ({{ trace.employee_id }}):</strong>
+              <p class="io-text">{{ trace.query }}</p>
+            </div>
+            <div class="io-section">
+              <strong>Assistant Synthesized Output:</strong>
+              <p class="io-text assistant-text">{{ trace.reply }}</p>
+            </div>
+          </div>
+
+          <!-- Metrics Strip -->
+          <div class="trace-metrics-strip">
+            <div class="metric-item">
+              <small>Total Latency</small>
+              <strong>{{ trace.latency_sec }}s</strong>
+            </div>
+            <div class="metric-item">
+              <small>Prompt Tokens</small>
+              <strong>{{ trace.prompt_tokens }}</strong>
+            </div>
+            <div class="metric-item">
+              <small>Completion Tokens</small>
+              <strong>{{ trace.completion_tokens }}</strong>
+            </div>
+            <div class="metric-item">
+              <small>Total Cost</small>
+              <strong class="text-green">${{ trace.cost_usd | number:'1.6-6' }}</strong>
+            </div>
+            <div class="metric-item">
+              <small>Model</small>
+              <strong>{{ trace.model }}</strong>
+            </div>
+          </div>
+
+          <!-- Span Waterfall Tree -->
+          <div class="waterfall-container">
+            <h4>Execution Waterfall Spans ({{ trace.spans.length }})</h4>
+            <div class="spans-list">
+              @for (span of trace.spans; track span.span_id) {
+                <div class="span-card" [class.guardrail]="span.type === 'guardrail'" [class.worker]="span.type === 'worker_agent'" [class.tool]="span.type === 'database_tool'">
+                  <div class="span-header">
+                    <div class="span-title">
+                      <span class="span-icon">
+                        @if (span.type === 'guardrail') { 🛡️ }
+                        @else if (span.type === 'worker_agent') { 🤖 }
+                        @else if (span.type === 'database_tool') { ⚙️ }
+                        @else { ✨ }
+                      </span>
+                      <strong>{{ span.name }}</strong>
+                      <span class="span-type-badge">{{ span.type }}</span>
+                    </div>
+
+                    <div class="span-metrics">
+                      @if (span.latency_sec) {
+                        <span>⏱️ {{ span.latency_sec }}s</span>
+                      }
+                      @if (span.tokens) {
+                        <span>• {{ span.tokens }} tok</span>
+                      }
+                    </div>
+                  </div>
+
+                  <!-- Payload Expander -->
+                  <div class="span-payload">
+                    @if (span.input) {
+                      <div class="payload-block">
+                        <small>Input Payload:</small>
+                        <pre><code>{{ span.input | json }}</code></pre>
+                      </div>
+                    }
+                    @if (span.output) {
+                      <div class="payload-block">
+                        <small>Execution Output:</small>
+                        <pre><code>{{ span.output | json }}</code></pre>
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+          </div>
+        </div>
+      } @else {
+        <div class="empty-detail">
+          <p>Select a trace from the left panel to inspect its execution waterfall tree.</p>
+        </div>
+      }
+    </div>
+  </div>
+</div>

@@ -1,0 +1,143 @@
+<div class="chat-layout">
+  <!-- Active Employee Selector Header -->
+  <div class="employee-bar">
+    <div class="employee-selector">
+      <label for="emp-select">Active Employee Context:</label>
+      <select
+        id="emp-select"
+        [ngModel]="selectedEmployeeId()"
+        (ngModelChange)="selectedEmployeeId.set($event)"
+      >
+        @for (emp of employees; track emp.id) {
+          <option [value]="emp.id">{{ emp.label }}</option>
+        }
+      </select>
+    </div>
+
+    <!-- Strategy Mode Switcher -->
+    <div class="agent-mode-selector">
+      <label>Engine Strategy:</label>
+      <div class="mode-pill-group">
+        <button
+          type="button"
+          class="mode-btn"
+          [class.active]="selectedAgentMode() === 'single'"
+          (click)="selectedAgentMode.set('single')"
+          title="Single-Agent ReAct Governor (Low latency, 4-budget)"
+        >
+          ⚡ Single Agent (ReAct)
+        </button>
+        <button
+          type="button"
+          class="mode-btn"
+          [class.active]="selectedAgentMode() === 'multi'"
+          (click)="selectedAgentMode.set('multi')"
+          title="Multi-Agent Supervisor delegating to HRIS, Policy & Escalation specialists"
+        >
+          🤖 Multi-Agent Team (Supervisor)
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quick Prompts Toolbar -->
+  <div class="quick-prompts">
+    <span>Quick Prompts:</span>
+    <button (click)="setQuickPrompt('What is my current accrued leave balance?')">
+      Check Leave Balance
+    </button>
+    <button (click)="setQuickPrompt('What grade band and entity am I in?')">
+      Verify My Employee Record
+    </button>
+    <button (click)="setQuickPrompt('I need to escalate an emergency leave exception to HRBP.')">
+      Escalate to HRBP
+    </button>
+    <button (click)="setQuickPrompt('Can you explain our parental leave policy?')">
+      Ask Policy Question
+    </button>
+  </div>
+
+  <!-- Messages Stream -->
+  <main class="chat-messages">
+    @for (msg of messages(); track msg.id) {
+      <div class="message-row" [class.user]="msg.sender === 'user'" [class.assistant]="msg.sender === 'assistant'">
+        <div class="avatar">
+          {{ msg.sender === 'user' ? '👤' : '🤖' }}
+        </div>
+
+        <div class="bubble-container">
+          <div class="bubble">
+            <p class="bubble-text">{{ msg.text }}</p>
+          </div>
+
+          @if ((msg.metadata?.tool_calls_executed?.length ?? 0) > 0) {
+            <div class="tool-card">
+              <div class="tool-header">
+                <span class="tool-icon">⚙️</span>
+                <strong>Controlled Tools Executed by AI:</strong>
+              </div>
+              @for (tool of msg.metadata?.tool_calls_executed ?? []; track tool.tool_name) {
+                <div class="tool-item">
+                  <span class="tool-badge">{{ tool.tool_name }}</span>
+                  <div class="tool-io">
+                    <div><strong>Input:</strong> <code>{{ tool.arguments | json }}</code></div>
+                    <div><strong>Database Result:</strong> <code>{{ tool.output | json }}</code></div>
+                  </div>
+                </div>
+              }
+            </div>
+          }
+
+          <!-- Performance & Cost Pill -->
+          @if (msg.metadata; as meta) {
+            <div class="meta-pill">
+              <span class="mode-badge" [class.multi-badge]="meta.agent_mode === 'multi'">
+                {{ meta.agent_mode === 'multi' ? '🤖 Multi-Agent Team' : '⚡ Single-Agent (ReAct)' }}
+              </span>
+              <span>•</span>
+              <span>⏱️ {{ meta.latency_sec }}s</span>
+              <span>•</span>
+              <span>Tokens: {{ meta.prompt_tokens }} in / {{ meta.completion_tokens }} out</span>
+              <span>•</span>
+              <span>Model: {{ meta.model }}</span>
+              <span>•</span>
+              <span>Cost: ${{ meta.cost_usd | number:'1.6-6' }}</span>
+            </div>
+          }
+        </div>
+      </div>
+    }
+
+    <!-- Loading Indicator -->
+    @if (isLoading()) {
+      <div class="message-row assistant">
+        <div class="avatar">🤖</div>
+        <div class="bubble-container">
+          <div class="bubble loading-bubble">
+            <div class="typing-dots">
+              <span></span><span></span><span></span>
+            </div>
+            <small>Qwen is reasoning & executing tools on Groq...</small>
+          </div>
+        </div>
+      </div>
+    }
+  </main>
+
+  <!-- Input Form -->
+  <footer class="chat-input-bar">
+    <form (ngSubmit)="onSendMessage()" class="input-form">
+      <input
+        type="text"
+        placeholder="Ask about leave policies, employee entitlements, or request escalation..."
+        [ngModel]="userMessage()"
+        (ngModelChange)="userMessage.set($event)"
+        name="userMessage"
+        [disabled]="isLoading()"
+      />
+      <button type="submit" [disabled]="isLoading() || !userMessage().trim()">
+        Send
+      </button>
+    </form>
+  </footer>
+</div>

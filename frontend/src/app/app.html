@@ -1,0 +1,45 @@
+<div class="app-shell">
+  <!-- Global Application Header -->
+  <header class="app-header">
+    <div class="header-branding">
+      <h1>Policy Answer Desk</h1>
+      <span class="badge-online">FastAPI + Groq Qwen Online</span>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <nav class="nav-tabs">
+      <button
+        class="nav-tab"
+        [class.active]="activeTab() === 'chat'"
+        (click)="setTab('chat')"
+      >
+        💬 Policy Chat Desk
+      </button>
+      <button
+        class="nav-tab"
+        [class.active]="activeTab() === 'documents'"
+        (click)="setTab('documents')"
+      >
+        📄 Policy Documents (MySQL)
+      </button>
+      <button
+        class="nav-tab"
+        [class.active]="activeTab() === 'traces'"
+        (click)="setTab('traces')"
+      >
+        📊 Observability & Traces (Langfuse)
+      </button>
+    </nav>
+  </header>
+
+  <!-- Main Viewport Router / Switcher -->
+  <main class="app-viewport">
+    @if (activeTab() === 'chat') {
+      <app-chat />
+    } @else if (activeTab() === 'documents') {
+      <app-document-management />
+    } @else if (activeTab() === 'traces') {
+      <app-trace-dashboard />
+    }
+  </main>
+</div>

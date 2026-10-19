@@ -1,0 +1,177 @@
+<div class="doc-management-container">
+  <!-- Section Title -->
+  <div class="section-header">
+    <div>
+      <h2>Policy Document Management</h2>
+      <p class="subtitle">Upload policies (.md, .txt) to automatically parse clauses and persist them into MySQL.</p>
+    </div>
+    <button class="btn-refresh" (click)="loadDocuments()" [disabled]="isLoading()">
+      🔄 Refresh
+    </button>
+  </div>
+
+  <!-- Status Alert Banner -->
+  @if (statusMessage(); as status) {
+    <div class="alert" [class.success]="status.type === 'success'" [class.error]="status.type === 'error'">
+      <span>{{ status.type === 'success' ? '✅' : '⚠️' }} {{ status.text }}</span>
+      <button class="btn-close" (click)="statusMessage.set(null)">✕</button>
+    </div>
+  }
+
+  <!-- Upload Policy Card -->
+  <div class="card upload-card">
+    <div class="card-header">
+      <h3>📤 Ingest New Policy Document</h3>
+      <span class="badge-sub">Auto-Chunking Enabled</span>
+    </div>
+
+    <form (ngSubmit)="onUpload()" class="upload-form">
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="doc-title">Document Title *</label>
+          <input
+            id="doc-title"
+            type="text"
+            placeholder="e.g. India Annual & Sick Leave Policy 2025"
+            [ngModel]="docTitle()"
+            (ngModelChange)="docTitle.set($event)"
+            name="docTitle"
+            required
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="doc-entity">Applicable Entity *</label>
+          <select
+            id="doc-entity"
+            [ngModel]="docEntity()"
+            (ngModelChange)="docEntity.set($event)"
+            name="docEntity"
+          >
+            <option value="India">India</option>
+            <option value="UK">UK</option>
+            <option value="Global">Global</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="doc-version">Version *</label>
+          <input
+            id="doc-version"
+            type="text"
+            placeholder="e.g. v2025.1"
+            [ngModel]="docVersion()"
+            (ngModelChange)="docVersion.set($event)"
+            name="docVersion"
+            required
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="doc-effective-date">Effective Date *</label>
+          <input
+            id="doc-effective-date"
+            type="date"
+            [ngModel]="docEffectiveDate()"
+            (ngModelChange)="docEffectiveDate.set($event)"
+            name="docEffectiveDate"
+            required
+          />
+        </div>
+      </div>
+
+      <div class="form-group file-group">
+        <label for="doc-file">Select File (.pdf, .docx, .md, or .txt) *</label>
+        <input
+          id="doc-file"
+          type="file"
+          accept=".pdf,.docx,.md,.txt,.markdown"
+          (change)="onFileChange($event)"
+          required
+        />
+        <small class="help-text">The parser will automatically identify Markdown headings and split the document into indexed clauses.</small>
+      </div>
+
+      <div class="form-actions">
+        <button
+          type="submit"
+          class="btn-primary"
+          [disabled]="isUploading() || !selectedFile() || !docTitle().trim()"
+        >
+          @if (isUploading()) {
+            <span>⏳ Parsing & Saving to MySQL...</span>
+          } @else {
+            <span>🚀 Ingest & Chunk Document</span>
+          }
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Documents Table Card -->
+  <div class="card table-card">
+    <div class="card-header">
+      <h3>📚 Stored Policies in MySQL ({{ documents().length }})</h3>
+      <span class="badge-status">System of Record</span>
+    </div>
+
+    @if (isLoading()) {
+      <div class="loading-state">
+        <p>Loading documents from MySQL...</p>
+      </div>
+    } @else if (documents().length === 0) {
+      <div class="empty-state">
+        <p>No policy documents found in MySQL.</p>
+        <small>Upload your first Markdown policy document above to start indexing!</small>
+      </div>
+    } @else {
+      <div class="table-responsive">
+        <table class="documents-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Document Title</th>
+              <th>Entity</th>
+              <th>Version</th>
+              <th>Effective Date</th>
+              <th>Clause Chunks</th>
+              <th>Uploaded At</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (doc of documents(); track doc.id) {
+              <tr>
+                <td><strong>#{{ doc.id }}</strong></td>
+                <td>
+                  <div class="doc-title-cell">
+                    <span class="doc-name">{{ doc.title }}</span>
+                    <span class="doc-filename">📄 {{ doc.filename }}</span>
+                  </div>
+                </td>
+                <td>
+                  <span class="entity-badge" [class]="doc.entity.toLowerCase()">
+                    {{ doc.entity }}
+                  </span>
+                </td>
+                <td><code>{{ doc.version }}</code></td>
+                <td>{{ doc.effective_date }}</td>
+                <td>
+                  <span class="chunk-badge">
+                    🧩 {{ doc.total_chunks }} Clauses
+                  </span>
+                </td>
+                <td><small>{{ doc.uploaded_at | date:'short' }}</small></td>
+                <td>
+                  <button class="btn-delete" (click)="onDelete(doc.id)" title="Delete from MySQL">
+                    🗑️
+                  </button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </div>
+</div>
